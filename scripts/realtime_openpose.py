@@ -74,18 +74,18 @@ class OpenPoseHandler(object):
         self.previous_time = rospy.Time.now()
         self.cloud_msg = None
         self.current_xyz = None
-        self.OP_DURATION = 1./2 # In seconds
+        self.OP_DURATION = 1./5 # In seconds
 
         # Openpose publisher 
-        self.openpose_pub = rospy.Publisher(f"/cam_{cam_id+1}/openpose",Image,queue_size=1)
+        self.openpose_pub = rospy.Publisher(f"/cam_{cam_id}/openpose",Image,queue_size=1)
         # markers publisher
         self.markers_pub = rospy.Publisher('/op_markers',Marker,queue_size=1)
         self.right_pub = rospy.Publisher('/op_right',Marker,queue_size=1)
         self.left_pub = rospy.Publisher('/op_left',Marker,queue_size=1)
         # Image subscriber
-        self.sub = rospy.Subscriber(f"/cam_{cam_id+1}/color/image_raw",Image,self.openpose_callback,queue_size=1)
+        self.sub = rospy.Subscriber(f"/cam_{cam_id}/color/image_raw",Image,self.openpose_callback,queue_size=1)
         # depth subscriber
-        self.depth_sub = rospy.Subscriber(f"/cam_{cam_id+1}/depth_registered/points",PointCloud2,self.depth_callback,queue_size=1)
+        self.depth_sub = rospy.Subscriber(f"/cam_{cam_id}/depth_registered/points",PointCloud2,self.depth_callback,queue_size=1)
 
 
     def draw_humans(self, image, humans):
@@ -148,35 +148,38 @@ class OpenPoseHandler(object):
                 ros_img.data = self.datum.cvOutputData.tobytes()
 
                 # Project the openpose joints to the cloud:
-                positions = self.datum.poseKeypoints
-                for pos in positions:
-                    if pos[0] != 0.0 and pos[1] != 0.0 and self.cloud_msg is not None:
+                if self.datum.poseKeypoints.shape:
 
-                        img_x = int(pos[0] * self.cloud_msg.width + 0.5)
-                        img_y = int(pos[1] * self.cloud_msg.height + 0.5)
+                    positions = self.datum.poseKeypoints[0]
 
-                        try:
-                            [x, y, z] = self.pixelTo3DPoint(self.cloud_msg, img_x, img_y)
-                            self.current_xyz = copy.copy([x,y,z])
-                        except TypeError as e:
-                            print(e)
-                        except Exception as e:
-                            print(e)
-                            cprint("[WARN] No Cloud data for this pixel? We keep the previous XYZ values","yellow")
-                            # [x,y,z] = copy.copy(self.current_xyz)
-                        
-                        d3_coords.append(self.current_xyz)
+                    for pos in positions:
+                        if pos[0] != 0.0 and pos[1] != 0.0 and self.cloud_msg is not None:
+
+                            img_x = int(pos[0] * self.cloud_msg.width + 0.5)
+                            img_y = int(pos[1] * self.cloud_msg.height + 0.5)
+
+                            try:
+                                [x, y, z] = self.pixelTo3DPoint(self.cloud_msg, img_x, img_y)
+                                self.current_xyz = copy.copy([x,y,z])
+                            except TypeError as e:
+                                print(e)
+                            except Exception as e:
+                                print(e)
+                                cprint("[WARN] No Cloud data for this pixel? We keep the previous XYZ values","yellow")
+                                # [x,y,z] = copy.copy(self.current_xyz)
+                            
+                            d3_coords.append(self.current_xyz)
 
             if d3_coords:
                 # If we have 3d coordinates, create markers and publish
                 markers_msg = self.pubmarkerSkeleton(-OpenPoseHandler.id_,new_time,d3_coords,[0,0,1],self.cam_id)
-                right_links_msg = self.RightLinks(OpenPoseHandler.id_,new_time,d3_coords,[0,0,1],self.cam_id)
-                left_links_msg = self.LeftLinks(OpenPoseHandler.id_,new_time,d3_coords,[0,0,1],self.cam_id)
+                # right_links_msg = self.RightLinks(OpenPoseHandler.id_,new_time,d3_coords,[0,0,1],self.cam_id)
+                # left_links_msg = self.LeftLinks(OpenPoseHandler.id_,new_time,d3_coords,[0,0,1],self.cam_id)
                 OpenPoseHandler.id_ += 1
 
                 self.markers_pub.publish(markers_msg)
-                self.right_pub.publish(right_links_msg)
-                self.left_pub.publish(left_links_msg)
+                # self.right_pub.publish(right_links_msg)
+                # self.left_pub.publish(left_links_msg)
 
             self.openpose_pub.publish(ros_img)
 
@@ -246,7 +249,7 @@ class OpenPoseHandler(object):
         markerLines.color.b = rgb[2]
         markerLines.color.a = 1.0
         markerLines.points = []
-        markerLines.lifetime = rospy.Duration(self.MARKER_DURATION)
+        markerLines.lifetime = rospy.Duration(self.OP_DURATION)
 
         if positions == list():
             return markerLines
@@ -276,7 +279,7 @@ class OpenPoseHandler(object):
         markerLines.color.b = rgb[2]
         markerLines.color.a = 1.0
         markerLines.points = []
-        markerLines.lifetime = rospy.Duration(self.MARKER_DURATION)
+        markerLines.lifetime = rospy.Duration(self.OP_DURATION)
 
         if positions == list():
             return markerLines
