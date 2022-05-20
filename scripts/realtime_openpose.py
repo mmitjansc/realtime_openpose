@@ -1,4 +1,4 @@
-#!/usr/bin/env python3.7
+#!/usr/bin/env python3
 
 mode = 'caffe'
 
@@ -18,7 +18,7 @@ import math
 from geometry_msgs.msg import Point
 
 
-if mode is 'caffe':
+if mode == 'caffe':
     try:
         root_dir = os.environ["HOME"]
         sys.path.append(root_dir + '/openpose/build/python')
@@ -30,7 +30,7 @@ if mode is 'caffe':
         mode = 'tf'
 
 
-if mode is 'tf':
+if mode == 'tf':
     from tf_pose import common
     from tf_pose.estimator import TfPoseEstimator
     from tf_pose.networks import model_wh
@@ -51,13 +51,13 @@ class OpenPoseHandler(object):
         # Neural Network Model parameters
         home_dir = os.environ["HOME"]
 
-        if mode is 'tf':
+        if mode == 'tf':
             self.model = home_dir + '/tf-pose-estimation/models/graph/cmu/graph_opt.pb'
 
             self.w, self.h = model_wh('432x368')
             self.e = TfPoseEstimator(self.model, target_size=(432, 368))
 
-        if mode is 'caffe':
+        if mode == 'caffe':
 
             # Custom Params (refer to include/openpose/flags.hpp for more parameters)
             self.params = dict()
@@ -130,7 +130,7 @@ class OpenPoseHandler(object):
 
             image = np.frombuffer(img_msg.data, dtype=np.uint8).reshape(img_msg.height, img_msg.width, -1)
 
-            if mode is 'tf':
+            if mode == 'tf':
 
                 # Run Open Pose on the images
                 humans = self.e.inference(image, resize_to_default=(self.w > 0 and self.h > 0), upsample_size=4.0)
@@ -139,16 +139,16 @@ class OpenPoseHandler(object):
                 ros_img = img_msg
                 ros_img.data = op_img.tobytes()
 
-            if mode is 'caffe':
+            if mode == 'caffe':
 
                 self.datum.cvInputData = image
-                self.opWrapper.emplaceAndPop([self.datum])
+                self.opWrapper.emplaceAndPop(op.VectorDatum([self.datum]))
 
                 ros_img = img_msg
                 ros_img.data = self.datum.cvOutputData.tobytes()
 
                 # Project the openpose joints to the cloud:
-                if self.datum.poseKeypoints.shape:
+                if self.datum.poseKeypoints is not None and self.datum.poseKeypoints.shape:
 
                     positions = self.datum.poseKeypoints[0]
 
