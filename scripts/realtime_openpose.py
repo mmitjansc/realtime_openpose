@@ -173,8 +173,8 @@ class OpenPoseHandler(object):
             if d3_coords:
                 # If we have 3d coordinates, create markers and publish
                 markers_msg = self.pubmarkerSkeleton(-OpenPoseHandler.id_,new_time,d3_coords,[0,0,1],self.cam_id)
-                # right_links_msg = self.RightLinks(OpenPoseHandler.id_,new_time,d3_coords,[0,0,1],self.cam_id)
-                # left_links_msg = self.LeftLinks(OpenPoseHandler.id_,new_time,d3_coords,[0,0,1],self.cam_id)
+                # right_links_msg = self.RightLinks(OpenPoseHandler.id_,new_time,d3_coords,[0,1,1,2,2,3],[0,0,1],self.cam_id)
+                # left_links_msg = self.LeftLinks(OpenPoseHandler.id_,new_time,d3_coords,[0,4,4,5,5,6],[0,0,1],self.cam_id)
                 OpenPoseHandler.id_ += 1
 
                 self.markers_pub.publish(markers_msg)
@@ -233,7 +233,7 @@ class OpenPoseHandler(object):
 
         return markerLines
 
-    def RightLinks(self,id, time, positions,rgb=[0,1,0],camera_num=1):
+    def MarkerLinks(self,id, time, positions,backpointers=[0,1,1,2,2,3],rgb=[0,1,0],camera_num=1):
         ''' Prepares Rviz visualization data for OpenPose skeleton '''
         markerLines = Marker()
         markerLines.header.frame_id = "cam_{}_color_optical_frame".format(camera_num)
@@ -254,40 +254,7 @@ class OpenPoseHandler(object):
         if positions == list():
             return markerLines
 
-        idx_1 = [0, 1, 1, 2, 2, 3]
-
-        for i in idx_1:
-
-            if not math.isnan(positions[i][0]) and not math.isnan(positions[i][1]) and not math.isnan(positions[i][2]):
-                markerLines.points.append(Point(positions[i][0], positions[i][1], positions[i][2]))
-
-        return markerLines
-
-    def LeftLinks(self,id, time, positions,rgb=[0,1,0],camera_num=1):
-        ''' Prepares Rviz visualization data for OpenPose skeleton '''
-        markerLines = Marker()
-        markerLines.header.frame_id = "cam_{}_color_optical_frame".format(camera_num)
-        markerLines.header.stamp = time
-        markerLines.ns = "bones"
-        markerLines.id = id
-        markerLines.type = Marker.LINE_STRIP
-        markerLines.scale.x = 0.04
-        markerLines.scale.y = 0.04
-        markerLines.scale.z = 0.04
-        markerLines.color.r = rgb[0]
-        markerLines.color.g = rgb[1]
-        markerLines.color.b = rgb[2]
-        markerLines.color.a = 1.0
-        markerLines.points = []
-        markerLines.lifetime = rospy.Duration(self.OP_DURATION)
-
-        if positions == list():
-            return markerLines
-
-        idx_2 = [0, 4, 4, 5, 5, 6]
-
-        for i in idx_2:
-
+        for i in backpointers:
             if not math.isnan(positions[i][0]) and not math.isnan(positions[i][1]) and not math.isnan(positions[i][2]):
                 markerLines.points.append(Point(positions[i][0], positions[i][1], positions[i][2]))
 
@@ -299,10 +266,8 @@ if __name__ == "__main__":
     rospy.init_node("openpose_caller_ros",anonymous=True,disable_signals=True)
     signal.signal(signal.SIGINT,shutdown)
 
-    OpenPose_cam1 = OpenPoseHandler(0)
+    OpenPose_cam1 = OpenPoseHandler(1)
     # OpenPose_cam2 = OpenPoseHandler(1) 
-
-    rate = rospy.Rate(0.1) #Every 10 seconds
 
     rospy.loginfo("Running OpenPose real time...")
     rospy.spin()
