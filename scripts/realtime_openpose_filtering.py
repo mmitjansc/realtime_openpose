@@ -61,19 +61,18 @@ class OpenPoseFilter(object):
 
         self.previous_time = rospy.Time.now()
         self.cloud_msg = None
-        self.current_xyz = None
         self.OP_DURATION = 1./5 # In seconds
 
         # Openpose publisher 
-        self.openpose_pub = rospy.Publisher(f"/cam_{cam_id}/openpose",Image,queue_size=1)
+        self.openpose_pub = rospy.Publisher(f"/cam_{cam_id+1}/openpose",Image,queue_size=1)
         # markers publisher
         self.markers_pub = rospy.Publisher('/op_markers',Marker,queue_size=1)
         self.right_pub = rospy.Publisher('/op_right',Marker,queue_size=1)
         self.left_pub = rospy.Publisher('/op_left',Marker,queue_size=1)
         # Image subscriber
-        self.sub = rospy.Subscriber(f"/cam_{cam_id}/color/image_raw",Image,self.openpose_callback,queue_size=1)
+        self.sub = rospy.Subscriber(f"/cam_{cam_id+1}/color/image_raw",Image,self.openpose_callback,queue_size=1)
         # depth subscriber
-        self.depth_sub = rospy.Subscriber(f"/cam_{cam_id}/depth_registered/points",PointCloud2,self.depth_callback,queue_size=1)
+        self.depth_sub = rospy.Subscriber(f"/cam_{cam_id+1}/depth_registered/points",PointCloud2,self.depth_callback,queue_size=1)
 
     def shutdown(self,sig,frame):
         rospy.loginfo("Shutting down ROS...")
@@ -119,31 +118,34 @@ class OpenPoseFilter(object):
 
                         try:
                             [x, y, z] = self.pixelTo3DPoint(self.cloud_msg, img_x, img_y)
-                            self.current_xyz = deepcopy([x,y,z])
+                            d3_coords.append([x,y,z])
                         except TypeError as e:
-                            print(e)
+                            raise e
                         except Exception as e:
                             print(e)
                             cprint("[WARN] No Cloud data for this pixel? We keep the previous XYZ values","yellow")
-                            # [x,y,z] = copy.copy(self.current_xyz)
-                            d3_coords.append(self.current_xyz)
-                    
+                            d3_coords.append([float('nan') for _ in range(3)])
+                    else:
+                        d3_coords.append([float('nan') for _ in range(3)])
+
                     part_id += 1
 
-            if d3_coords:
-                # If we have 3D coordianates, first filter them!
-                coords = np.array(d3_coords) 
+            coords = np.array(d3_coords)
+            if coords.size and np.isnan(coords[:,0]).sum() < 4:
                 assert coords.shape == (7,3)
+                # If we have 3D coordianates, first filter them!
                 if self.op_filter is not None:
                     self.op_filter.add_trajectory(coords)
+                    # print(coords)
+                    # print("Filtering!")
                     coords = self.op_filter.predict_trajectory().squeeze().T
                     assert coords.shape == (7,3)
 
                 # Create markers and publish
-                markers_msg = self.pubmarkerSkeleton(-OpenPoseFilter.id_,new_time,coords,[0,0,1],self.cam_id)
-                right_links_msg = self.MarkerLinks(OpenPoseFilter.id_,new_time,coords,[0,1,1,2,2,3],[0,0,1],self.cam_id)
-                left_links_msg = self.MarkerLinks(OpenPoseFilter.id_,new_time,coords,[0,4,4,5,5,6],[0,0,1],self.cam_id)
-                OpenPoseFilter.id_ += 1
+                markers_msg = self.pubmarkerSkeleton(-OpenPoseFilter._id,new_time,coords,[0,0,1],self.cam_id)
+                right_links_msg = self.MarkerLinks(OpenPoseFilter._id,new_time,coords,[0,1,1,2,2,3],[0,0,1],self.cam_id)
+                left_links_msg = self.MarkerLinks(OpenPoseFilter._id,new_time,coords,[0,4,4,5,5,6],[0,0,1],self.cam_id)
+                OpenPoseFilter._id += 1
 
                 self.markers_pub.publish(markers_msg)
                 self.right_pub.publish(right_links_msg)
@@ -217,7 +219,7 @@ class OpenPoseFilter(object):
         markerLines.color.a = 1.0
         markerLines.points = []
         markerLines.lifetime = rospy.Duration(self.OP_DURATION)
-        if not positions:
+        if not len(positions):
             return markerLines
         for i in backpointers:
             if not math.isnan(positions[i][0]) and not math.isnan(positions[i][1]) and not math.isnan(positions[i][2]):
