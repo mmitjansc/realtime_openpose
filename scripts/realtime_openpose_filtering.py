@@ -26,14 +26,17 @@ try:
     import torch.nn as nn
     sys.path.insert(0,home_dir+'/catkin_ws/src/movement_assessment/activity_recognition/scripts')
     from trajectory_filter import TrajectoryPredictor
-except:
+except Exception as e:
+    raise e
     USE_TORCH = False
+    cprint("Can't open torch module, not filtering depth values.","yellow")
 
 class OpenPoseFilter(object):
 
     _id = 1
 
     def __init__(self,cam_id=0):
+        global USE_TORCH
 
         self.cam_id = cam_id
         
@@ -47,8 +50,9 @@ class OpenPoseFilter(object):
                 noise_model = torch.load(home_dir+'/catkin_ws/src/movement_assessment/activity_recognition/scripts/trained_nets/noise_removal_network_1.pt')
                 self.op_filter = TrajectoryPredictor(nan_model,noise_model)
             except:
-                pass
-
+                USE_TORCH = False
+                cprint("Can't load the models, not filtering depth values.","yellow")
+                
         # OpenPose initialization
         self.params = dict()
         self.params["model_folder"] = home_dir+"/openpose/models/"
@@ -61,11 +65,14 @@ class OpenPoseFilter(object):
 
         self.previous_time = rospy.Time.now()
         self.cloud_msg = None
-        self.OP_DURATION = 1./5 # In seconds
+        self.OP_DURATION = 1./4 # In seconds
 
         # Openpose publisher 
         self.openpose_pub = rospy.Publisher(f"/cam_{cam_id+1}/openpose",Image,queue_size=1)
         # markers publisher
+        self.dnn_markers_pub = rospy.Publisher('/dnn_markers',Marker,queue_size=1)
+        self.dnn_right_pub = rospy.Publisher('/dnn_right',Marker,queue_size=1)
+        self.dnn_left_pub = rospy.Publisher('/dnn_left',Marker,queue_size=1)
         self.markers_pub = rospy.Publisher('/op_markers',Marker,queue_size=1)
         self.right_pub = rospy.Publisher('/op_right',Marker,queue_size=1)
         self.left_pub = rospy.Publisher('/op_left',Marker,queue_size=1)
@@ -133,18 +140,26 @@ class OpenPoseFilter(object):
             coords = np.array(d3_coords)
             if coords.size and np.isnan(coords[:,0]).sum() < 4:
                 assert coords.shape == (7,3)
-                # If we have 3D coordianates, first filter them!
+                # # If we have 3D coordianates, first filter them!
                 if self.op_filter is not None:
                     self.op_filter.add_trajectory(coords)
-                    # print(coords)
-                    # print("Filtering!")
-                    coords = self.op_filter.predict_trajectory().squeeze().T
-                    assert coords.shape == (7,3)
+                    new_coords = self.op_filter.predict_trajectory().squeeze().T
+                    assert new_coords.shape == (7,3)
+
+                    # Create markers and publish
+                    markers_msg = self.pubmarkerSkeleton(-OpenPoseFilter._id,new_time,new_coords,[0,0,1],self.cam_id+1)
+                    right_links_msg = self.MarkerLinks(OpenPoseFilter._id,new_time,new_coords,[0,1,1,2,2,3],[0,0,1],self.cam_id+1)
+                    left_links_msg = self.MarkerLinks(OpenPoseFilter._id,new_time,new_coords,[0,4,4,5,5,6],[0,0,1],self.cam_id+1)
+                    OpenPoseFilter._id += 1
+
+                    self.dnn_markers_pub.publish(markers_msg)
+                    self.dnn_right_pub.publish(right_links_msg)
+                    self.dnn_left_pub.publish(left_links_msg)
 
                 # Create markers and publish
-                markers_msg = self.pubmarkerSkeleton(-OpenPoseFilter._id,new_time,coords,[0,0,1],self.cam_id)
-                right_links_msg = self.MarkerLinks(OpenPoseFilter._id,new_time,coords,[0,1,1,2,2,3],[0,0,1],self.cam_id)
-                left_links_msg = self.MarkerLinks(OpenPoseFilter._id,new_time,coords,[0,4,4,5,5,6],[0,0,1],self.cam_id)
+                markers_msg = self.pubmarkerSkeleton(-OpenPoseFilter._id,new_time,coords,[1,0,0],self.cam_id+1)
+                right_links_msg = self.MarkerLinks(OpenPoseFilter._id,new_time,coords,[0,1,1,2,2,3],[1,0,0],self.cam_id+1)
+                left_links_msg = self.MarkerLinks(OpenPoseFilter._id,new_time,coords,[0,4,4,5,5,6],[1,0,0],self.cam_id+1)
                 OpenPoseFilter._id += 1
 
                 self.markers_pub.publish(markers_msg)
@@ -228,6 +243,7 @@ class OpenPoseFilter(object):
         return markerLines
 
     def run(self):
+        print("Running OpenPose filter, waiting for images...")
         rospy.spin()
 
 if __name__ == "__main__":
