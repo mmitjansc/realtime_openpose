@@ -1,8 +1,6 @@
 #!/usr/bin/env python3.7
 
 import rospy
-import torch
-import torch.nn as nn
 import os
 from sensor_msgs.msg import Image, PointCloud2
 from visualization_msgs.msg import Marker
@@ -19,13 +17,17 @@ import signal
 
 home_dir = os.environ["HOME"]
 
-sys.path.insert(0,home_dir+'/catkin_ws/src/movement_assessment/activity_recognition/scripts')
 sys.path.insert(0,home_dir+'/openpose/build/python')
-
 from openpose import pyopenpose as op
 
-from trajectory_filter import TrajectoryPredictor
-import utilities.gcn_utils as ar_ut
+USE_TORCH = True
+try:
+    import torch
+    import torch.nn as nn
+    sys.path.insert(0,home_dir+'/catkin_ws/src/movement_assessment/activity_recognition/scripts')
+    from trajectory_filter import TrajectoryPredictor
+except:
+    USE_TORCH = False
 
 class OpenPoseFilter(object):
 
@@ -38,9 +40,14 @@ class OpenPoseFilter(object):
         # List of parts that we want to print
         self.list_of_parts = [1, 9, 10, 11, 12, 13, 14]
 
-        nan_model   = torch.load(home_dir+'/catkin_ws/src/movement_assessment/activity_recognition/scripts/trained_nets/depth_nn_filter_0.pt')
-        noise_model = torch.load(home_dir+'/catkin_ws/src/movement_assessment/activity_recognition/scripts/trained_nets/noise_removal_network_1.pt')
-        self.op_filter = TrajectoryPredictor(nan_model,noise_model)
+        self.op_filter = None
+        if USE_TORCH:
+            try:
+                nan_model   = torch.load(home_dir+'/catkin_ws/src/movement_assessment/activity_recognition/scripts/trained_nets/depth_nn_filter_0.pt')
+                noise_model = torch.load(home_dir+'/catkin_ws/src/movement_assessment/activity_recognition/scripts/trained_nets/noise_removal_network_1.pt')
+                self.op_filter = TrajectoryPredictor(nan_model,noise_model)
+            except:
+                pass
 
         # OpenPose initialization
         self.params = dict()
@@ -75,7 +82,7 @@ class OpenPoseFilter(object):
     def depth_callback(self,depth_msg):
         # Store the cloud msg 
         self.cloud_msg = depth_msg
-        
+
     def openpose_callback(self, img_msg):
 
         new_time = rospy.Time.now()
@@ -127,14 +134,15 @@ class OpenPoseFilter(object):
                 # If we have 3D coordianates, first filter them!
                 coords = np.array(d3_coords) 
                 assert coords.shape == (7,3)
-                self.op_filter.add_trajectory(coords)
-                filtered_frame = self.op_filter.predict_trajectory().squeeze().T
-                assert filtered_frame.shape == (7,3)
+                if self.op_filter is not None:
+                    self.op_filter.add_trajectory(coords)
+                    coords = self.op_filter.predict_trajectory().squeeze().T
+                    assert coords.shape == (7,3)
 
                 # Create markers and publish
-                markers_msg = self.pubmarkerSkeleton(-OpenPoseFilter.id_,new_time,filtered_frame,[0,0,1],self.cam_id)
-                right_links_msg = self.MarkerLinks(OpenPoseFilter.id_,new_time,filtered_frame,[0,1,1,2,2,3],[0,0,1],self.cam_id)
-                left_links_msg = self.MarkerLinks(OpenPoseFilter.id_,new_time,filtered_frame,[0,4,4,5,5,6],[0,0,1],self.cam_id)
+                markers_msg = self.pubmarkerSkeleton(-OpenPoseFilter.id_,new_time,coords,[0,0,1],self.cam_id)
+                right_links_msg = self.MarkerLinks(OpenPoseFilter.id_,new_time,coords,[0,1,1,2,2,3],[0,0,1],self.cam_id)
+                left_links_msg = self.MarkerLinks(OpenPoseFilter.id_,new_time,coords,[0,4,4,5,5,6],[0,0,1],self.cam_id)
                 OpenPoseFilter.id_ += 1
 
                 self.markers_pub.publish(markers_msg)
