@@ -1,4 +1,4 @@
-#!/usr/bin/env python3.7
+#!/usr/bin/env python3
 
 import rospy
 import os
@@ -35,21 +35,21 @@ class OpenPoseFilter(object):
 
     _id = 1
 
-    def __init__(self,cam_id=0):
+    def __init__(self):
         global USE_TORCH
 
-        self.cam_id = cam_id
-        
         # List of parts that we want to print
         self.list_of_parts = [1, 9, 10, 11, 12, 13, 14]
 
         self.op_filter = None
         if USE_TORCH:
             try:
-                nan_model   = torch.load(home_dir+'/catkin_ws/src/movement_assessment/activity_recognition/scripts/trained_nets/depth_nn_filter_0.pt')
-                noise_model = torch.load(home_dir+'/catkin_ws/src/movement_assessment/activity_recognition/scripts/trained_nets/noise_removal_network_1.pt')
+                nan_model   = torch.load(home_dir+'/catkin_ws/src/movement_assessment/activity_recognition/scripts/trained_nets/depth_nn_filter.pt')
+                noise_model = torch.load(home_dir+'/catkin_ws/src/movement_assessment/activity_recognition/scripts/trained_nets/noise_removal_network.pt')
                 self.op_filter = TrajectoryPredictor(nan_model,noise_model)
+                cprint("DNN models for filtering loaded.","green")
             except:
+
                 USE_TORCH = False
                 cprint("Can't load the models, not filtering depth values.","yellow")
                 
@@ -65,10 +65,10 @@ class OpenPoseFilter(object):
 
         self.previous_time = rospy.Time.now()
         self.cloud_msg = None
-        self.OP_DURATION = 1./4 # In seconds
+        self.OP_DURATION = 1./0.5 # In seconds
 
         # Openpose publisher 
-        self.openpose_pub = rospy.Publisher(f"/cam_{cam_id+1}/openpose",Image,queue_size=1)
+        self.openpose_pub = rospy.Publisher(f"/camera/openpose",Image,queue_size=1)
         # markers publisher
         self.dnn_markers_pub = rospy.Publisher('/dnn_markers',Marker,queue_size=1)
         self.dnn_right_pub = rospy.Publisher('/dnn_right',Marker,queue_size=1)
@@ -77,9 +77,9 @@ class OpenPoseFilter(object):
         self.right_pub = rospy.Publisher('/op_right',Marker,queue_size=1)
         self.left_pub = rospy.Publisher('/op_left',Marker,queue_size=1)
         # Image subscriber
-        self.sub = rospy.Subscriber(f"/cam_{cam_id+1}/color/image_raw",Image,self.openpose_callback,queue_size=1)
+        self.sub = rospy.Subscriber(f"/camera/color/image_raw",Image,self.openpose_callback,queue_size=1)
         # depth subscriber
-        self.depth_sub = rospy.Subscriber(f"/cam_{cam_id+1}/depth_registered/points",PointCloud2,self.depth_callback,queue_size=1)
+        self.depth_sub = rospy.Subscriber(f"/camera/depth_registered/points",PointCloud2,self.depth_callback,queue_size=1)
 
     def shutdown(self,sig,frame):
         rospy.loginfo("Shutting down ROS...")
@@ -99,7 +99,13 @@ class OpenPoseFilter(object):
             image = np.frombuffer(img_msg.data, dtype=np.uint8).reshape(img_msg.height, img_msg.width, -1)
 
             self.datum.cvInputData = image
-            self.opWrapper.emplaceAndPop([self.datum])
+            print("Calling emplace and pop...")
+            try:
+                self.opWrapper.emplaceAndPop(op.VectorDatum([self.datum]))
+            except:
+                self.opWrapper.emplaceAndPop([self.datum])
+
+            print("EMPLACED AND POPPED")
 
             ros_img = img_msg
             ros_img.data = self.datum.cvOutputData.tobytes()
@@ -147,9 +153,9 @@ class OpenPoseFilter(object):
                     assert new_coords.shape == (7,3)
 
                     # Create markers and publish
-                    markers_msg = self.pubmarkerSkeleton(-OpenPoseFilter._id,new_time,new_coords,[0,0,1],self.cam_id+1)
-                    right_links_msg = self.MarkerLinks(OpenPoseFilter._id,new_time,new_coords,[0,1,1,2,2,3],[0,0,1],self.cam_id+1)
-                    left_links_msg = self.MarkerLinks(OpenPoseFilter._id,new_time,new_coords,[0,4,4,5,5,6],[0,0,1],self.cam_id+1)
+                    markers_msg = self.pubmarkerSkeleton(-OpenPoseFilter._id,new_time,new_coords,[0,0,1])
+                    right_links_msg = self.MarkerLinks(OpenPoseFilter._id,new_time,new_coords,[0,1,1,2,2,3],[0,0,1])
+                    left_links_msg = self.MarkerLinks(OpenPoseFilter._id,new_time,new_coords,[0,4,4,5,5,6],[0,0,1])
                     OpenPoseFilter._id += 1
 
                     self.dnn_markers_pub.publish(markers_msg)
@@ -157,9 +163,9 @@ class OpenPoseFilter(object):
                     self.dnn_left_pub.publish(left_links_msg)
 
                 # Create markers and publish
-                markers_msg = self.pubmarkerSkeleton(-OpenPoseFilter._id,new_time,coords,[1,0,0],self.cam_id+1)
-                right_links_msg = self.MarkerLinks(OpenPoseFilter._id,new_time,coords,[0,1,1,2,2,3],[1,0,0],self.cam_id+1)
-                left_links_msg = self.MarkerLinks(OpenPoseFilter._id,new_time,coords,[0,4,4,5,5,6],[1,0,0],self.cam_id+1)
+                markers_msg = self.pubmarkerSkeleton(-OpenPoseFilter._id,new_time,coords,[1,0,0])
+                right_links_msg = self.MarkerLinks(OpenPoseFilter._id,new_time,coords,[0,1,1,2,2,3],[1,0,0])
+                left_links_msg = self.MarkerLinks(OpenPoseFilter._id,new_time,coords,[0,4,4,5,5,6],[1,0,0])
                 OpenPoseFilter._id += 1
 
                 self.markers_pub.publish(markers_msg)
@@ -193,10 +199,10 @@ class OpenPoseFilter(object):
 
         return [X, Y, Z]
 
-    def pubmarkerSkeleton(self,id_, time, positions,rgb=[0,1,0],camera_num=1):
+    def pubmarkerSkeleton(self,id_, time, positions,rgb=[0,1,0]):
         ''' Prepares Rviz visualization data for OpenPose skeleton '''
         markerLines = Marker()
-        markerLines.header.frame_id = "cam_{}_color_optical_frame".format(camera_num)
+        markerLines.header.frame_id = "camera_color_frame"
         markerLines.header.stamp = time
         markerLines.ns = "bones"
         markerLines.id = id_
@@ -217,10 +223,10 @@ class OpenPoseFilter(object):
 
         return markerLines
 
-    def MarkerLinks(self,id, time, positions,backpointers=[0,1,1,2,2,3],rgb=[0,1,0],camera_num=1):
+    def MarkerLinks(self,id, time, positions,backpointers=[0,1,1,2,2,3],rgb=[0,1,0]):
         ''' Prepares Rviz visualization data for OpenPose skeleton '''
         markerLines = Marker()
-        markerLines.header.frame_id = "cam_{}_color_optical_frame".format(camera_num)
+        markerLines.header.frame_id = "camera_color_frame"
         markerLines.header.stamp = time
         markerLines.ns = "bones"
         markerLines.id = id
@@ -243,7 +249,7 @@ class OpenPoseFilter(object):
         return markerLines
 
     def run(self):
-        print("Running OpenPose filter, waiting for images...")
+        print("Running OpenPose filter at {:.1f} Hz, waiting for images...".format(1./self.OP_DURATION))
         rospy.spin()
 
 if __name__ == "__main__":
