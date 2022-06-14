@@ -44,9 +44,10 @@ class OpenPoseFilter(object):
         self.op_filter = None
         if USE_TORCH:
             try:
-                nan_model   = torch.load(home_dir+'/catkin_ws/src/movement_assessment/activity_recognition/scripts/trained_nets/depth_nn_filter.pt')
-                noise_model = torch.load(home_dir+'/catkin_ws/src/movement_assessment/activity_recognition/scripts/trained_nets/noise_removal_network.pt')
+                nan_model   = torch.load(home_dir+'/catkin_ws/src/movement_assessment/activity_recognition/scripts/trained_nets/depth_nn_filter.pt',map_location='cpu')
+                noise_model = torch.load(home_dir+'/catkin_ws/src/movement_assessment/activity_recognition/scripts/trained_nets/noise_removal_network.pt',map_location='cpu')
                 self.op_filter = TrajectoryPredictor(nan_model,noise_model)
+                torch.cuda.empty_cache()
                 cprint("DNN models for filtering loaded.","green")
             except:
 
@@ -65,7 +66,7 @@ class OpenPoseFilter(object):
 
         self.previous_time = rospy.Time.now()
         self.cloud_msg = None
-        self.OP_DURATION = 1./0.5 # In seconds
+        self.OP_DURATION = 1./5 # In seconds
 
         # Openpose publisher 
         self.openpose_pub = rospy.Publisher(f"/camera/openpose",Image,queue_size=1)
@@ -99,13 +100,10 @@ class OpenPoseFilter(object):
             image = np.frombuffer(img_msg.data, dtype=np.uint8).reshape(img_msg.height, img_msg.width, -1)
 
             self.datum.cvInputData = image
-            print("Calling emplace and pop...")
             try:
                 self.opWrapper.emplaceAndPop(op.VectorDatum([self.datum]))
             except:
                 self.opWrapper.emplaceAndPop([self.datum])
-
-            print("EMPLACED AND POPPED")
 
             ros_img = img_msg
             ros_img.data = self.datum.cvOutputData.tobytes()
@@ -202,7 +200,7 @@ class OpenPoseFilter(object):
     def pubmarkerSkeleton(self,id_, time, positions,rgb=[0,1,0]):
         ''' Prepares Rviz visualization data for OpenPose skeleton '''
         markerLines = Marker()
-        markerLines.header.frame_id = "camera_color_frame"
+        markerLines.header.frame_id = "camera_color_optical_frame"
         markerLines.header.stamp = time
         markerLines.ns = "bones"
         markerLines.id = id_
@@ -226,7 +224,7 @@ class OpenPoseFilter(object):
     def MarkerLinks(self,id, time, positions,backpointers=[0,1,1,2,2,3],rgb=[0,1,0]):
         ''' Prepares Rviz visualization data for OpenPose skeleton '''
         markerLines = Marker()
-        markerLines.header.frame_id = "camera_color_frame"
+        markerLines.header.frame_id = "camera_color_optical_frame"
         markerLines.header.stamp = time
         markerLines.ns = "bones"
         markerLines.id = id
