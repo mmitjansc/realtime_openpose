@@ -131,16 +131,6 @@ class OpenPoseFilter(object):
 
                 for pos in positions:
 
-                    # if self.cloud_msg is not None and self.K is not None and part_id in self.arm_parts and pos[0] != 0.0 and pos[1] != 0.0:
-                    #     # It's an arm joint, store it differently IF self.K is already stored
-                    #     img_x = int(pos[0] * self.cloud_msg.width + 0.5)
-                    #     img_y = int(pos[1] * self.cloud_msg.height + 0.5)
-                    #     arm_coords.append([img_x,img_y])
-
-                    # if part_id not in self.list_of_parts:
-                    #     part_id += 1
-                    #     continue
-
                     if pos[0] != 0.0 and pos[1] != 0.0 and self.cloud_msg is not None:
 
                         img_x = int(pos[0] * self.cloud_msg.width + 0.5)
