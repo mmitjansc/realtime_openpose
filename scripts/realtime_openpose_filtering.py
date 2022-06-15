@@ -131,15 +131,15 @@ class OpenPoseFilter(object):
 
                 for pos in positions:
 
-                    if self.cloud_msg is not None and self.K is not None and part_id in self.arm_parts and pos[0] != 0.0 and pos[1] != 0.0:
-                        # It's an arm joint, store it differently IF self.K is already stored
-                        img_x = int(pos[0] * self.cloud_msg.width + 0.5)
-                        img_y = int(pos[1] * self.cloud_msg.height + 0.5)
-                        arm_coords.append([img_x,img_y])
+                    # if self.cloud_msg is not None and self.K is not None and part_id in self.arm_parts and pos[0] != 0.0 and pos[1] != 0.0:
+                    #     # It's an arm joint, store it differently IF self.K is already stored
+                    #     img_x = int(pos[0] * self.cloud_msg.width + 0.5)
+                    #     img_y = int(pos[1] * self.cloud_msg.height + 0.5)
+                    #     arm_coords.append([img_x,img_y])
 
-                    if part_id not in self.list_of_parts:
-                        part_id += 1
-                        continue
+                    # if part_id not in self.list_of_parts:
+                    #     part_id += 1
+                    #     continue
 
                     if pos[0] != 0.0 and pos[1] != 0.0 and self.cloud_msg is not None:
 
@@ -148,14 +148,17 @@ class OpenPoseFilter(object):
 
                         try:
                             [x, y, z] = self.pixelTo3DPoint(self.cloud_msg, img_x, img_y)
-                            d3_coords.append([x,y,z])
-                        except TypeError as e:
-                            raise e
+                            if part_id in self.list_of_parts:
+                                d3_coords.append([x,y,z])
+                            elif part_id in self.arm_parts:
+                                arm_coords.append([x,y,z])
                         except Exception as e:
                             print(e)
                             cprint("[WARN] No Cloud data for this pixel? We keep the previous XYZ values","yellow")
-                            d3_coords.append([float('nan') for _ in range(3)])
-                    else:
+                            if part_id in self.list_of_parts:
+                                d3_coords.append([float('nan') for _ in range(3)])
+                    
+                    elif part_id in self.list_of_parts:
                         d3_coords.append([float('nan') for _ in range(3)])
 
                     part_id += 1
@@ -178,7 +181,8 @@ class OpenPoseFilter(object):
                         # Compute the plane first:
                         A,B,C,D = self.compute_plane(new_coords)
                         arm_joints = np.array(arm_coords)
-                        unit_xyz = np.linalg.inv(self.K).dot(np.concatenate((arm_joints,np.ones((arm_joints.shape[0],1))),axis=1).T).T
+                        unit_xyz = (arm_joints/arm_joints[:,[2]])[:,:2]
+                        # unit_xyz = np.linalg.inv(self.K).dot(np.concatenate((arm_joints,np.ones((arm_joints.shape[0],1))),axis=1).T).T
                         z = -D/(A*unit_xyz[:,[0]] + B*unit_xyz[:,[1]] + C)
                         x = unit_xyz[:,[0]]*z
                         y = unit_xyz[:,[1]]*z
@@ -196,6 +200,8 @@ class OpenPoseFilter(object):
                     self.dnn_left_pub.publish(left_links_msg)
 
                 # Create markers and publish raw OpenPose measurements
+                if arm_coords:
+                    coords = np.concatenate((coords,arm_coords),axis=0)
                 markers_msg = self.skeleton_markers(-OpenPoseFilter._id,new_time,coords,[1,0,0])
                 right_links_msg = self.marker_links(OpenPoseFilter._id,new_time,coords,[0,1,1,2,2,3],[1,0,0])
                 left_links_msg = self.marker_links(OpenPoseFilter._id,new_time,coords,[0,4,4,5,5,6],[1,0,0])
