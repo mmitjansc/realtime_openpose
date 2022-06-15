@@ -9,10 +9,7 @@ from sensor_msgs.msg import CameraInfo
 import sys
 import struct
 import numpy as np
-import transformations as tr
-from copy import deepcopy
 from termcolor import cprint
-import dill as pickle
 import math
 import signal
 
@@ -136,9 +133,7 @@ class OpenPoseFilter(object):
                         # It's an arm joint, store it differently IF self.K is already stored
                         img_x = int(pos[0] * self.cloud_msg.width + 0.5)
                         img_y = int(pos[1] * self.cloud_msg.height + 0.5)
-                        x_z,y_z = np.linalg.inv(self.K).dot([img_x,img_y,1])[:2]
                         arm_coords.append([img_x,img_y])
-
 
                     if part_id not in self.list_of_parts:
                         part_id += 1
@@ -165,6 +160,7 @@ class OpenPoseFilter(object):
 
             coords = np.array(d3_coords)
             if coords.size and np.isnan(coords[:,0]).sum() < 4:
+                # Only publish coordinates if we have at lest 4 joints visible
                 assert coords.shape == (7,3)
 
                 # # If we have 3D coordianates, first filter them!
@@ -186,7 +182,6 @@ class OpenPoseFilter(object):
                         y = unit_xyz[:,[1]]*z
                         point_coord = np.concatenate((x,y,z),axis=1)
                         new_coords = np.concatenate((new_coords,point_coord),axis=0)
-
 
                     # Create markers and publish
                     markers_msg = self.skeleton_markers(-OpenPoseFilter._id,new_time,new_coords,[0,0,1])
@@ -268,7 +263,7 @@ class OpenPoseFilter(object):
         markerLines.color.a = 1.0
         markerLines.points = []
         markerLines.lifetime = rospy.Duration(self.OP_DURATION)
-        for i in range(0, len(positions)):
+        for i in range(len(positions)):
             if not math.isnan(positions[i][0]) and not math.isnan(positions[i][1]) and not math.isnan(positions[i][2]):
                 markerLines.points.append(Point(positions[i][0], positions[i][1], positions[i][2]))
 

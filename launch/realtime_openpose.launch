@@ -1,9 +1,9 @@
 <launch>
 
-<include file="$(find realsense2_camera)/launch/rs_rgbd.launch"/>
+    <include file="$(find realsense2_camera)/launch/rs_rgbd.launch"/>
 
-<node pkg="realtime_openpose" name="realtime_openpose" type="realtime_openpose_filtering.py" required="true" output="screen"/>
+    <node pkg="realtime_openpose" name="realtime_openpose_node" type="realtime_openpose_filtering.py" required="true" output="screen"/>
 
-<node type="rviz" name="rviz" pkg="rviz" args="-d $(find realtime_openpose)/rviz/realtime_openpose_config.rviz" required="false"/>
+    <node type="rviz" name="rviz" pkg="rviz" args="-d $(find realtime_openpose)/rviz/realtime_openpose_config.rviz" required="false"/>
 
 </launch>
