@@ -18,9 +18,11 @@ import signal
 
 home_dir = os.environ["HOME"]
 
+# Load OpenPose
 sys.path.insert(0,home_dir+'/openpose/build/python')
 from openpose import pyopenpose as op
 
+# Load depth filtering networks
 USE_TORCH = True
 try:
     import torch
@@ -28,7 +30,6 @@ try:
     sys.path.insert(0,home_dir+'/catkin_ws/src/movement_assessment/activity_recognition/scripts')
     from trajectory_filter import TrajectoryPredictor
 except Exception as e:
-    raise e
     USE_TORCH = False
     cprint("Can't open torch module, not filtering depth values.","yellow")
 
@@ -52,7 +53,6 @@ class OpenPoseFilter(object):
                 torch.cuda.empty_cache()
                 cprint("DNN models for filtering loaded.","green")
             except:
-
                 USE_TORCH = False
                 cprint("Can't load the models, not filtering depth values.","yellow")
                 
@@ -137,7 +137,7 @@ class OpenPoseFilter(object):
                         img_x = int(pos[0] * self.cloud_msg.width + 0.5)
                         img_y = int(pos[1] * self.cloud_msg.height + 0.5)
                         x_z,y_z = np.linalg.inv(self.K).dot([img_x,img_y,1])[:2]
-                        arm_coords.append([x_z,y_z])
+                        arm_coords.append([img_x,img_y])
 
 
                     if part_id not in self.list_of_parts:
@@ -173,21 +173,19 @@ class OpenPoseFilter(object):
                     new_coords = self.op_filter.predict_trajectory().squeeze().T
                     assert new_coords.shape == (7,3)
 
-                    # Get the XYZ coordinates for the arms. First compute the plane
-                    plane = self.compute_plane(new_coords)
-                    arm_3d_coords = list()
-                    for arm_joint in arm_coords:
-                        x_z,y_z = arm_joint
-                        z = -plane[3]/(plane[0]*x_z + plane[1]*y_z + plane[2])
-                        x = x_z*z
-                        y = y_z*z
-                        joint_coord = [x,y,z]
-                        arm_3d_coords.append(joint_coord)
-                        
-                    if arm_3d_coords:
+                    # Get the XYZ coordinates for the arms
+                    if arm_coords:
                         # If we do have arms, append the markers to new_coords. 
                         # This should NOT affect the marker_links function, and should work with skeleton_markers
-                        new_coords = np.concatenate((new_coords,arm_3d_coords),axis=0)
+                        # Compute the plane first:
+                        A,B,C,D = self.compute_plane(new_coords)
+                        arm_joints = np.array(arm_coords)
+                        unit_xyz = np.linalg.inv(self.K).dot(np.concatenate((arm_joints,np.ones((arm_joints.shape[0],1))),axis=1).T).T
+                        z = -D/(A*unit_xyz[:,[0]] + B*unit_xyz[:,[1]] + C)
+                        x = unit_xyz[:,[0]]*z
+                        y = unit_xyz[:,[1]]*z
+                        point_coord = np.concatenate((x,y,z),axis=1)
+                        new_coords = np.concatenate((new_coords,point_coord),axis=0)
 
 
                     # Create markers and publish

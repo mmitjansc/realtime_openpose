@@ -16,7 +16,7 @@ def main():
     # We need to find the 3rd channel by: Ax+By+Cz+d=0
     z = (-D-A*X[:,0]-B*X[:,1])/C
     # Add some noise to Z:
-    z += (np.random.rand(*z.shape) - 0.5) * 0
+    z += (np.random.rand(*z.shape) - 0.5) * 1
     X[:,2] = z
 
     
@@ -26,7 +26,6 @@ def main():
     
     # Prepare to run SVD on the covariance matrix:
     mean = X.mean(axis=0,keepdims=True)
-    print("Original X:\n",X)
     Cov = (X-mean).T.dot(X-mean) / (X.shape[0]-1)
 
     # Run singular value decomposition:
@@ -45,18 +44,18 @@ def main():
     ### Now, with new X/Z, Y/Z, find their XYZ coordinates
     # Camera calibration matrix:
     K = np.array([421.7107238769531, 0.0, 426.1136169433594, 0.0, 420.7950744628906, 239.36465454101562, 0.0, 0.0, 1.0]).reshape((3,3))
-    xp,yp = 300,40 # random pixel coordinates
-    x_z,y_z = np.linalg.inv(K).dot([xp,yp,1])[:2]
+    xp_yp = np.random.randn(10,2) * 10
+    unit_xyz = np.linalg.inv(K).dot(np.concatenate((xp_yp,np.ones((xp_yp.shape[0],1))),axis=1).T).T
 
     # Finally, obtain the XYZ coordinates:
-    z = -D/(A*x_z + B*y_z + C)
-    x = x_z*z
-    y = y_z*z
-    point_coord = [x,y,z]
-    print("XYZ coordinates:",point_coord)
+    z = -D/(A*unit_xyz[:,[0]] + B*unit_xyz[:,[1]] + C)
+    x = unit_xyz[:,[0]]*z
+    y = unit_xyz[:,[1]]*z
+    point_coord = np.concatenate((x,y,z),axis=1)
+    print("XYZ coordinates:\n",point_coord)
 
     ## Test if they actually belong to the plane...
-    print(np.append(point_coord,1).dot(plane))
+    print(np.concatenate((point_coord,np.ones((point_coord.shape[0],1))),axis=1).dot(plane))
 
 
 
