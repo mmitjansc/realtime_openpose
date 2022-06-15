@@ -61,11 +61,11 @@ class OpenPoseFilter(object):
         self.opWrapper = op.WrapperPython()
         self.opWrapper.configure(self.params)
         self.opWrapper.start()
-        self.datum = op.Datum()
+        # datum = op.Datum()
 
         self.previous_time = rospy.Time.now()
         self.cloud_msg = None
-        self.OP_DURATION = 1./5 # In seconds
+        self.OP_DURATION = 1./1 # In seconds
 
         # Camera calibration matrix
         self.K = None
@@ -99,6 +99,7 @@ class OpenPoseFilter(object):
     def depth_callback(self,depth_msg):
         # Store the cloud msg 
         self.cloud_msg = depth_msg
+        # self.depth_sub.unregister()
 
     def openpose_callback(self, img_msg):
 
@@ -110,26 +111,27 @@ class OpenPoseFilter(object):
 
             image = np.frombuffer(img_msg.data, dtype=np.uint8).reshape(img_msg.height, img_msg.width, -1)
 
-            self.datum.cvInputData = image
+            datum = op.Datum()
+            datum.cvInputData = image
             try:
-                self.opWrapper.emplaceAndPop(op.VectorDatum([self.datum]))
+                self.opWrapper.emplaceAndPop(op.VectorDatum([datum]))
             except:
-                self.opWrapper.emplaceAndPop([self.datum])
+                self.opWrapper.emplaceAndPop([datum])
 
             ros_img = img_msg
-            ros_img.data = self.datum.cvOutputData.tobytes()
+            ros_img.data = datum.cvOutputData.tobytes()
 
             # Project the openpose joints to the cloud:
-            if self.datum.poseKeypoints.shape:
+            if datum.poseKeypoints is not None and datum.poseKeypoints.shape:
 
-                positions = self.datum.poseKeypoints[0]
+                positions = datum.poseKeypoints[0]
 
                 # We need to keep track of the part IDs so that we get only the ones we want
                 part_id = 0
 
                 for pos in positions:
 
-                    if self.K and part_id in self.arm_parts and pos[0] != 0.0 and pos[1] != 0.0:
+                    if self.K is not None and part_id in self.arm_parts and pos[0] != 0.0 and pos[1] != 0.0:
                         # It's an arm joint, store it differently IF self.K is already stored
                         img_x = int(pos[0] * self.cloud_msg.width + 0.5)
                         img_y = int(pos[1] * self.cloud_msg.height + 0.5)
@@ -157,7 +159,7 @@ class OpenPoseFilter(object):
                         d3_coords.append([float('nan') for _ in range(3)])
 
                     part_id += 1
-
+                    
             coords = np.array(d3_coords)
             if coords.size and np.isnan(coords[:,0]).sum() < 4:
                 # Only publish coordinates if we have at lest 4 joints visible
