@@ -1,6 +1,6 @@
 <launch>
 
-    <include file="$(find realsense2_camera)/launch/rs_rgbd.launch"/>
+    <include file="$(find realsense2_camera)/launch/rs_rgbd_custom.launch"/>
 
     <node pkg="realtime_openpose" name="realtime_openpose_node" type="realtime_openpose_filtering.py" required="true" output="screen"/>
 

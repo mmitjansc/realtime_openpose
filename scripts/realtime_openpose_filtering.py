@@ -65,7 +65,7 @@ class OpenPoseFilter(object):
 
         self.previous_time = rospy.Time.now()
         self.cloud_msg = None
-        self.OP_DURATION = 1./1 # In seconds
+        self.OP_DURATION = 1./3 # In seconds
 
         # Camera calibration matrix
         self.K = None
@@ -131,7 +131,7 @@ class OpenPoseFilter(object):
 
                 for pos in positions:
 
-                    if self.K is not None and part_id in self.arm_parts and pos[0] != 0.0 and pos[1] != 0.0:
+                    if self.cloud_msg is not None and self.K is not None and part_id in self.arm_parts and pos[0] != 0.0 and pos[1] != 0.0:
                         # It's an arm joint, store it differently IF self.K is already stored
                         img_x = int(pos[0] * self.cloud_msg.width + 0.5)
                         img_y = int(pos[1] * self.cloud_msg.height + 0.5)
@@ -159,7 +159,7 @@ class OpenPoseFilter(object):
                         d3_coords.append([float('nan') for _ in range(3)])
 
                     part_id += 1
-                    
+
             coords = np.array(d3_coords)
             if coords.size and np.isnan(coords[:,0]).sum() < 4:
                 # Only publish coordinates if we have at lest 4 joints visible
