@@ -44,8 +44,8 @@ class OpenPoseFilter(object):
         self.op_filter = None
         if USE_TORCH:
             try:
-                nan_model   = torch.load(home_dir+'/catkin_ws/src/movement_assessment/activity_recognition/scripts/trained_nets/depth_nn_filter.pt',map_location='cpu')
-                noise_model = torch.load(home_dir+'/catkin_ws/src/movement_assessment/activity_recognition/scripts/trained_nets/noise_removal_network.pt',map_location='cpu')
+                nan_model   = torch.load(home_dir+'/catkin_ws/src/realtime_openpose/trained_nets/depth_nn_filter.pt',map_location='cpu')
+                noise_model = torch.load(home_dir+'/catkin_ws/src/realtime_openpose/trained_nets/noise_removal_network.pt',map_location='cpu')
                 self.op_filter = TrajectoryPredictor(nan_model,noise_model)
                 torch.cuda.empty_cache()
                 cprint("DNN models for filtering loaded.","green")
