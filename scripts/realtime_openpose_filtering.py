@@ -65,7 +65,7 @@ class OpenPoseFilter(object):
 
         self.previous_time = rospy.Time.now()
         self.cloud_msg = None
-        self.OP_DURATION = 1./3 # In seconds
+        self.OP_DURATION = 1./5 # In seconds
 
         # Camera calibration matrix
         self.K = None
@@ -169,15 +169,19 @@ class OpenPoseFilter(object):
                         # If we do have arms, append the markers to new_coords. 
                         # This should NOT affect the marker_links function, and should work with skeleton_markers
                         # Compute the plane first:
-                        A,B,C,D = self.compute_plane(new_coords)
-                        arm_joints = np.array(arm_coords)
-                        unit_xyz = (arm_joints/arm_joints[:,[2]])[:,:2]
-                        # unit_xyz = np.linalg.inv(self.K).dot(np.concatenate((arm_joints,np.ones((arm_joints.shape[0],1))),axis=1).T).T
-                        z = -D/(A*unit_xyz[:,[0]] + B*unit_xyz[:,[1]] + C)
-                        x = unit_xyz[:,[0]]*z
-                        y = unit_xyz[:,[1]]*z
-                        point_coord = np.concatenate((x,y,z),axis=1)
-                        new_coords = np.concatenate((new_coords,point_coord),axis=0)
+                        try:
+                            A,B,C,D = self.compute_plane(new_coords)
+                            arm_joints = np.array(arm_coords)
+                            unit_xyz = (arm_joints/arm_joints[:,[2]])[:,:2]
+                            # unit_xyz = np.linalg.inv(self.K).dot(np.concatenate((arm_joints,np.ones((arm_joints.shape[0],1))),axis=1).T).T
+                            z = -D/(A*unit_xyz[:,[0]] + B*unit_xyz[:,[1]] + C)
+                            x = unit_xyz[:,[0]]*z
+                            y = unit_xyz[:,[1]]*z
+                            point_coord = np.concatenate((x,y,z),axis=1)
+                            new_coords = np.concatenate((new_coords,point_coord),axis=0)
+                        except:
+                            rospy.logwarn("SVD failed.")
+                            new_coords = np.concatenate((new_coords,arm_coords),axis=0)
 
                     # Create markers and publish
                     markers_msg = self.skeleton_markers(-OpenPoseFilter._id,new_time,new_coords,[0,0,1])
